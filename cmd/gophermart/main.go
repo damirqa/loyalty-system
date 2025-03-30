@@ -5,6 +5,7 @@ import (
 	"damirqa/loyalty-system/internal/service"
 	"database/sql"
 	"flag"
+	_ "github.com/lib/pq"
 	"net/http"
 	"os"
 	"time"
