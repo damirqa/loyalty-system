@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"github.com/go-chi/chi"
 	"go.uber.org/zap"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
@@ -98,7 +98,7 @@ func (h *APIHandler) SubmitOrder(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	}
 
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

@@ -32,6 +32,10 @@ func (o orderRepository) GetOrdersByUserID(ctx context.Context, userID int64) ([
 
 	defer rows.Close()
 
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+
 	var orders []*domain.Order
 	for rows.Next() {
 		var order domain.Order

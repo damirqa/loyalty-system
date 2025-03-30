@@ -52,6 +52,11 @@ func (b balanceRepository) GetWithdrawalsByUserID(ctx context.Context, userID in
 	defer rows.Close()
 
 	var withdrawals []*domain.Withdrawal
+
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+
 	for rows.Next() {
 		var w domain.Withdrawal
 		err := rows.Scan(&w.Order, &w.Sum, &w.ProcessedAt)
