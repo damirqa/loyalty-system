@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 	"io"
 	"net/http"
+	"strconv"
 )
 
 type APIHandler struct {
@@ -30,11 +31,15 @@ func NewAPIHandler(auth service.AuthService, order service.OrderService, balance
 func (h *APIHandler) RegisterRoutes(r *chi.Mux) {
 	r.Post("/api/user/register", h.Register)
 	r.Post("/api/user/login", h.Login)
-	r.Post("/api/user/orders", h.SubmitOrder)
-	r.Get("/api/user/orders", h.ListOrders)
-	r.Get("/api/user/balance", h.GetBalance)
-	r.Post("/api/user/balance/withdraw", h.Withdraw)
-	r.Get("/api/user/withdrawals", h.ListWithdrawals)
+
+	r.Group(func(r chi.Router) {
+		r.Use(AuthMiddleware())
+		r.Post("/api/user/orders", h.SubmitOrder)
+		r.Get("/api/user/orders", h.ListOrders)
+		r.Get("/api/user/balance", h.GetBalance)
+		r.Post("/api/user/balance/withdraw", h.Withdraw)
+		r.Get("/api/user/withdrawals", h.ListWithdrawals)
+	})
 }
 
 func (h *APIHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -58,6 +63,16 @@ func (h *APIHandler) Register(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	cookie := &http.Cookie{
+		Name:     "Authorization",
+		Value:    strconv.FormatInt(user.ID, 10),
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   3600,
+	}
+	http.SetCookie(w, cookie)
+	w.Header().Set("Authorization", cookie.Value)
 
 	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(user)
@@ -84,6 +99,16 @@ func (h *APIHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cookie := &http.Cookie{
+		Name:     "Authorization",
+		Value:    strconv.FormatInt(user.ID, 10),
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   3600,
+	}
+	http.SetCookie(w, cookie)
+	w.Header().Set("Authorization", cookie.Value)
+
 	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(user)
 	if err != nil {
@@ -93,7 +118,7 @@ func (h *APIHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) SubmitOrder(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value("userID").(int64)
+	userID, ok := r.Context().Value(userIDKey).(int64)
 	if !ok {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	}
@@ -123,7 +148,8 @@ func (h *APIHandler) SubmitOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) ListOrders(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value("userID").(int64)
+	userID, ok := r.Context().Value(userIDKey).(int64)
+	w.Header().Set("Content-Type", "application/json")
 	if !ok {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -148,7 +174,7 @@ func (h *APIHandler) ListOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value("userID").(int64)
+	userID, ok := r.Context().Value(userIDKey).(int64)
 	if !ok {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -160,6 +186,8 @@ func (h *APIHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+
 	err = json.NewEncoder(w).Encode(balance)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -168,7 +196,7 @@ func (h *APIHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) Withdraw(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value("userID").(int64)
+	userID, ok := r.Context().Value(userIDKey).(int64)
 	if !ok {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -198,7 +226,7 @@ func (h *APIHandler) Withdraw(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) ListWithdrawals(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value("userID").(int64)
+	userID, ok := r.Context().Value(userIDKey).(int64)
 	if !ok {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -214,6 +242,8 @@ func (h *APIHandler) ListWithdrawals(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+
+	w.Header().Set("Content-Type", "application/json")
 
 	err = json.NewEncoder(w).Encode(withdrawals)
 	if err != nil {

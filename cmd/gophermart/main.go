@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"flag"
 	_ "github.com/lib/pq"
+	"log"
 	"net/http"
 	"os"
 	"time"
@@ -13,6 +14,10 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"go.uber.org/zap"
+
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 
 	"damirqa/loyalty-system/internal/config"
 	delivery "damirqa/loyalty-system/internal/delivery/http"
@@ -22,6 +27,7 @@ func main() {
 	runAddress := flag.String("a", os.Getenv("RUN_ADDRESS"), "Run address")
 	dbURI := flag.String("d", os.Getenv("DATABASE_URI"), "Database URI")
 	accrualAddress := flag.String("r", os.Getenv("ACCRUAL_SYSTEM_ADDRESS"), "Accrual system address")
+	migrationsPath := flag.String("m", "./migrations", "Path to migration files")
 	flag.Parse()
 
 	logger, _ := zap.NewProduction()
@@ -32,6 +38,8 @@ func main() {
 		DatabaseURI:          *dbURI,
 		AccrualSystemAddress: *accrualAddress,
 	}
+
+	applyMigrations(cfg.DatabaseURI, *migrationsPath)
 
 	db, err := sql.Open("postgres", cfg.DatabaseURI)
 	if err != nil {
@@ -53,7 +61,6 @@ func main() {
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
-	router.Use(delivery.AuthMiddleware())
 
 	apiHandler := delivery.NewAPIHandler(authService, orderService, balanceService, accrualClient, logger)
 	apiHandler.RegisterRoutes(router)
@@ -70,4 +77,20 @@ func main() {
 	if err := srv.ListenAndServe(); err != nil {
 		logger.Fatal("Failed to start server", zap.Error(err))
 	}
+}
+
+func applyMigrations(databaseURL, migrationsPath string) {
+	m, err := migrate.New(
+		"file://"+migrationsPath,
+		databaseURL,
+	)
+	if err != nil {
+		log.Fatalf("Ошибка инициализации миграций: %v", err)
+	}
+
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		log.Fatalf("Ошибка применения миграций: %v", err)
+	}
+
+	log.Println("Миграции успешно применены или уже актуальны")
 }

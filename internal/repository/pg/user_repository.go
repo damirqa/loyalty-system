@@ -17,13 +17,12 @@ type userRepository struct {
 }
 
 func (u userRepository) CreateUser(ctx context.Context, user *domain.User) error {
-	query := "INSERT INTO users (login, pssword_hash) VALUES ($1, $2)"
-	_, err := u.db.ExecContext(ctx, query, user.Login, user.PasswordHash)
-	return err
+	query := "INSERT INTO users (login, password_hash) VALUES ($1, $2) RETURNING id"
+	return u.db.QueryRowContext(ctx, query, user.Login, user.PasswordHash).Scan(&user.ID)
 }
 
 func (u userRepository) GetUserByLogin(ctx context.Context, login string) (*domain.User, error) {
-	query := "SELECT login, password_hash FROM users WHERE login = $1"
+	query := "SELECT id, login, password_hash FROM users WHERE login = $1"
 	row := u.db.QueryRowContext(ctx, query, login)
 
 	var user domain.User
